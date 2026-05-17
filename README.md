@@ -1,6 +1,6 @@
 <img width="1536" height="1024" alt="f0d575f1-6db5-4a6f-8573-4cdcf4c115e2" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
 
-# EncryptoPI - by TheJuicePapi
+# EncryptoPI - by WastelandSYS
 
 
 ![Screenshot_2024-08-06_16-52-57-5](https://github.com/user-attachments/assets/c94d10f8-e364-4397-8b2e-c09281a3f702)
@@ -46,7 +46,7 @@ INSTALLATION & USAGE
 
 Git clone installation:
 
-1. 'git clone https://github.com/TheJuicePapi/encryptopi.git'
+1. 'git clone https://github.com/WastelandSYS/encryptopi.git'
 2. 'cd encryptopi'
 3. 'sudo chmod +x install.sh encryptopi.py'
 4. 'sudo ./install.sh'
