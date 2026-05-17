@@ -549,7 +549,7 @@ def display_menu():
     ╱╱╱╱╱╱╱╱╱╱╱╱╭━╯┃┃┃
     ╱╱╱╱╱╱╱╱╱╱╱╱╰━━╯╰╯
     """)
-    print("  EncryptoPI Encryptor - TheJuicePapi ")
+    print("  EncryptoPI Encryptor - WastelandSYS ")
     print(Fore.CYAN + """
        1. Show Available Keys
        2. Generate Fernet Key
