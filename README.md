@@ -74,3 +74,30 @@ DEPENDANCIES
 
 This scipt has been tested on my RPI 4b running a kali linux arm.
 Enjoy and use responsibly
+
+
+## Improved installer behavior
+
+- Installs Python dependencies with `apt` (Raspberry Pi OS / Debian compatible).
+- Creates CLI shortcut at `/usr/local/bin/encryptopi`.
+- Creates app launcher at `/usr/share/applications/encryptopi.desktop`.
+- Attempts to create a desktop shortcut in the invoking user's `~/Desktop` when run with `sudo`, which improves Raspberry Pi desktop compatibility.
+
+### Uninstall
+
+Run:
+
+```bash
+sudo ./uninstall.sh
+```
+
+This removes the command shortcut and desktop launchers, but keeps your keys/input/output data folders.
+
+
+### Quick runtime check
+
+You can verify the Python runtime and module initialization without entering the interactive menu:
+
+```bash
+python3 encryptopi.py --self-test --no-clear
+```
