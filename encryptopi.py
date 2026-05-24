@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import serialization
 from pathlib import Path
-from colorama import Fore, Style, init
+from colorama import Fore, init
 from tqdm import tqdm
-from pathlib import Path
+import argparse
 import json
 import os
-import sys
 import base64
 import hashlib
-import getpass
 import zipfile
 
 # Initialize colorama
@@ -36,6 +31,8 @@ for directory in [KEYS_DIR, INPUT_DIR, OUTPUT_DIR, DECRYPT_OUTPUT_DIR]:
 
 # Function to clear terminal
 def clear_terminal():
+    if os.environ.get("ENCRYPTOPI_NO_CLEAR") == "1":
+        return
     os.system('cls' if os.name == 'nt' else 'clear')
 
 # Function to generate a new encryption key
@@ -306,22 +303,6 @@ def encrypt_files_aes(file_path, key):
         print(Fore.GREEN + f"Encrypted {file_path.name} to {encrypted_file_path.name}")
     except Exception as e:
         print(Fore.RED + f"Error encrypting file {file_path}: {e}")
-
-def decrypt_file_aes(file_path, key):
-    try:
-        with open(file_path, "rb") as file:
-            encrypted_data = file.read()
-        iv = encrypted_data[:16]  # Extract the IV from the start of the encrypted data
-        encrypted_data = encrypted_data[16:]  # Remaining data is the actual encrypted content
-        cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
-        decryptor = cipher.decryptor()
-        decrypted_data = decryptor.update(encrypted_data) + decryptor.finalize()
-        decrypted_file_path = DECRYPT_OUTPUT_DIR / file_path.name.replace(".aes", "")
-        with open(decrypted_file_path, "wb") as file:
-            file.write(decrypted_data)
-        print(Fore.GREEN + f"Decrypted {file_path.name} to {decrypted_file_path.name}")
-    except Exception as e:
-        print(Fore.RED + f"Error decrypting file {file_path}: {e}")
 
 def encrypt_files_aes_with_key(file_path, key):
     try:
@@ -617,4 +598,26 @@ def main_menu():
         input(Fore.CYAN + "Press Enter to return to the main menu...")
 
 if __name__ == "__main__":
-    main_menu()
+    parser = argparse.ArgumentParser(description="EncryptoPI encryption/decryption tool")
+    parser.add_argument("--self-test", action="store_true", help="Run a quick runtime self-test and exit")
+    parser.add_argument("--no-clear", action="store_true", help="Disable terminal clear operations")
+    args = parser.parse_args()
+
+    if args.no_clear:
+        os.environ["ENCRYPTOPI_NO_CLEAR"] = "1"
+
+    if args.self_test:
+        try:
+            print(Fore.CYAN + "Running self-test...")
+            for directory in [KEYS_DIR, INPUT_DIR, OUTPUT_DIR, DECRYPT_OUTPUT_DIR]:
+                directory.mkdir(parents=True, exist_ok=True)
+            _ = Fernet.generate_key()
+            test_hash = calculate_hash(__file__)
+            if not test_hash:
+                raise RuntimeError("Failed to calculate script hash")
+            print(Fore.GREEN + "Self-test passed.")
+        except Exception as e:
+            print(Fore.RED + f"Self-test failed: {e}")
+            raise SystemExit(1)
+    else:
+        main_menu()
