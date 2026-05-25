@@ -239,14 +239,15 @@ def calculate_hash(file_path):
         return None
 
 # Function to encrypt a file using Fernet
-def encrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None):
+def encrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None, output_dir=None):
     try:
         fernet = Fernet(key)
         with open(file_path, "rb") as file:
             file_data = file.read()
         encrypted_data = fernet.encrypt(file_data)
         rel = file_path.relative_to(STATE.input_dir) if STATE.input_dir in file_path.parents else Path(file_path.name)
-        encrypted_file_path = safe_output_path(STATE.output_dir, rel, ".enc")
+        target_output_dir = Path(output_dir) if output_dir else STATE.output_dir
+        encrypted_file_path = safe_output_path(target_output_dir, rel, ".enc")
         with open(encrypted_file_path, "wb") as file:
             file.write(encrypted_data)
         write_manifest(build_manifest_entry("encrypt", "Fernet", file_path, encrypted_file_path, key_name), manifest_path=manifest_path)
@@ -254,11 +255,11 @@ def encrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None):
         return encrypted_file_path
     except Exception as e:
         LOGGER.exception("Fernet encrypt failed for %s", file_path)
-        print(Fore.RED + f"Error encrypting file {file_path}: {e}")
+        print(Fore.RED + f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
         return None
 
 # Function to decrypt a file using Fernet
-def decrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None):
+def decrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None, decrypt_output_dir=None):
     try:
         fernet = Fernet(key)
         with open(file_path, "rb") as file:
@@ -266,15 +267,16 @@ def decrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None):
         decrypted_data = fernet.decrypt(encrypted_data)
         rel = file_path.relative_to(STATE.output_dir) if STATE.output_dir in file_path.parents else Path(file_path.name)
         rel = rel.with_suffix("")
-        decrypted_file_path = STATE.decrypt_output_dir / rel
+        target_decrypt_dir = Path(decrypt_output_dir) if decrypt_output_dir else STATE.decrypt_output_dir
+        decrypted_file_path = target_decrypt_dir / rel
         decrypted_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(decrypted_file_path, "wb") as file:
             file.write(decrypted_data)
         write_manifest(build_manifest_entry("decrypt", "Fernet", file_path, decrypted_file_path, key_name), manifest_path=manifest_path)
-        print(Fore.GREEN + f"Decrypted {file_path.name} to {STATE.decrypt_output_dir}")
+        print(Fore.GREEN + f"Decrypted {file_path.name} to {target_decrypt_dir}")
     except Exception as e:
         LOGGER.exception("Fernet decrypt failed for %s", file_path)
-        print(Fore.RED + f"Error decrypting file {file_path}: {e}")
+        print(Fore.RED + f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
 
 # Function to handle encryption of multiple or all files
 def encrypt_files():
@@ -470,7 +472,7 @@ def generate_aes_key():
         LOGGER.exception("generate_aes_key failed")
         print(Fore.RED + f"Error generating AES key: {e}")        
         
-def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path=None):
+def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path=None, output_dir=None):
     try:
         if len(key) != 32:
             raise ValueError("Invalid AES key length. Must be 32 bytes for AES-256.")
@@ -483,7 +485,8 @@ def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path
         ciphertext = encryptor.update(file_data) + encryptor.finalize()
         encrypted_data = b"GCM1" + iv + encryptor.tag + ciphertext
         rel = file_path.relative_to(STATE.input_dir) if STATE.input_dir in file_path.parents else Path(file_path.name)
-        encrypted_file_path = safe_output_path(STATE.output_dir, rel, ".aes")
+        target_output_dir = Path(output_dir) if output_dir else STATE.output_dir
+        encrypted_file_path = safe_output_path(target_output_dir, rel, ".aes")
         with open(encrypted_file_path, "wb") as file:
             file.write(encrypted_data)
         write_manifest(build_manifest_entry("encrypt", "AES-GCM-v1", file_path, encrypted_file_path, key_name), manifest_path=manifest_path)
@@ -491,10 +494,10 @@ def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path
         return encrypted_file_path
     except Exception as e:
         LOGGER.exception("AES encrypt failed for %s", file_path)
-        print(Fore.RED + f"Error encrypting file {file_path}: {e}")
+        print(Fore.RED + f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
         return None
 
-def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None):
+def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None, decrypt_output_dir=None):
     try:
         if len(key) != 32:
             raise ValueError("Invalid AES key length. Must be 32 bytes for AES-256.")
@@ -517,7 +520,8 @@ def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None):
             decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
         rel = file_path.relative_to(STATE.output_dir) if STATE.output_dir in file_path.parents else Path(file_path.name)
         rel = rel.with_suffix("")
-        decrypted_file_path = STATE.decrypt_output_dir / rel
+        target_decrypt_dir = Path(decrypt_output_dir) if decrypt_output_dir else STATE.decrypt_output_dir
+        decrypted_file_path = target_decrypt_dir / rel
         decrypted_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(decrypted_file_path, "wb") as file:
             file.write(decrypted_data)
@@ -526,10 +530,10 @@ def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None):
         print(Fore.GREEN + f"Decrypted {file_path.name} to {decrypted_file_path.name}")
     except InvalidTag:
         LOGGER.exception("AES decrypt authentication failed for %s", file_path)
-        print(Fore.RED + f"Error decrypting file {file_path}: authentication failed (data tampered or wrong key).")
+        print(Fore.RED + "Error decrypting file: authentication failed (data tampered or wrong key).")
     except Exception as e:
         LOGGER.exception("AES decrypt failed for %s", file_path)
-        print(Fore.RED + f"Error decrypting file {file_path}: {e}")
+        print(Fore.RED + f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
 
 def encrypt_files_aes():
     try:
@@ -570,12 +574,23 @@ def run_cli_operation(args):
     key = load_key(args.key)
     if key is None:
         raise SystemExit(2)
+    if args.infile and args.folder:
+        raise SystemExit("Error: use either --infile or --folder, not both.")
     if not args.infile and not args.folder:
-        raise SystemExit("Provide --infile or --folder")
-    targets = [Path(args.infile)] if args.infile else [p for p in Path(args.folder).rglob("*") if p.is_file()]
+        raise SystemExit("Error: provide exactly one of --infile or --folder.")
+    if args.infile:
+        infile_path = Path(args.infile)
+        if not infile_path.is_file():
+            raise SystemExit(f"Error: file does not exist: {infile_path}")
+        targets = [infile_path]
+    else:
+        folder_path = Path(args.folder)
+        if not folder_path.is_dir():
+            raise SystemExit(f"Error: folder does not exist: {folder_path}")
+        targets = [p for p in folder_path.rglob("*") if p.is_file()]
     if args.algo == "fernet":
         if len(key) != 44:
-            raise SystemExit("Fernet requires a 44-byte key.")
+            raise SystemExit("Error: wrong key type. Fernet operations require a Fernet key (44-byte base64 key file).")
         for t in targets:
             if args.command == "encrypt":
                 encrypt_file_fernet(t, key, args.key)
@@ -583,7 +598,7 @@ def run_cli_operation(args):
                 decrypt_file_fernet(t, key, args.key)
     else:
         if len(key) != 32:
-            raise SystemExit("AES requires a 32-byte key.")
+            raise SystemExit("Error: wrong key type. AES operations require a 32-byte AES key file.")
         for t in targets:
             if args.command == "encrypt":
                 encrypt_files_aes_with_key(t, key, args.key)
@@ -593,23 +608,29 @@ def run_cli_operation(args):
 def run_extended_self_test():
     with tempfile.TemporaryDirectory() as td:
         manifest_path = Path(td) / "selftest_manifest.jsonl"
+        test_output_dir = Path(td) / "output"
+        test_decrypt_dir = Path(td) / "decrypted_output"
+        test_output_dir.mkdir(parents=True, exist_ok=True)
+        test_decrypt_dir.mkdir(parents=True, exist_ok=True)
         tpath = Path(td) / "sample.txt"
         tpath.write_text("encryptopi-self-test")
         fkey = Fernet.generate_key()
         akey = os.urandom(32)
-        f_enc = encrypt_file_fernet(tpath, fkey, "selftest_fernet", manifest_path=manifest_path)
-        decrypt_file_fernet(f_enc, fkey, "selftest_fernet", manifest_path=manifest_path)
-        a_enc = encrypt_files_aes_with_key(tpath, akey, "selftest_aes", manifest_path=manifest_path)
-        decrypt_file_aes(a_enc, akey, "selftest_aes", manifest_path=manifest_path)
-        if calculate_hash(tpath) != calculate_hash(STATE.decrypt_output_dir / tpath.name):
+        f_enc = encrypt_file_fernet(tpath, fkey, "selftest_fernet", manifest_path=manifest_path, output_dir=test_output_dir)
+        decrypt_file_fernet(f_enc, fkey, "selftest_fernet", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
+        a_enc = encrypt_files_aes_with_key(tpath, akey, "selftest_aes", manifest_path=manifest_path, output_dir=test_output_dir)
+        decrypt_file_aes(a_enc, akey, "selftest_aes", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
+        if calculate_hash(tpath) != calculate_hash(test_decrypt_dir / tpath.name):
             raise RuntimeError("Roundtrip hash mismatch")
         if not verify_manifest_integrity(manifest_path=manifest_path):
             raise RuntimeError("Self-test manifest verification failed")
-        for p in [f_enc, a_enc, STATE.decrypt_output_dir / tpath.name]:
+        for p in [f_enc, a_enc, test_decrypt_dir / tpath.name]:
             if p and Path(p).exists():
                 Path(p).unlink()
         if manifest_path.exists():
             manifest_path.unlink()
+        if any(test_output_dir.rglob("*")) or any(test_decrypt_dir.rglob("*")):
+            raise RuntimeError("Self-test cleanup failed")
         
 def add_aes_key_metadata():
     try:
@@ -854,7 +875,14 @@ if __name__ == "__main__":
         os.environ["ENCRYPTOPI_NO_CLEAR"] = "1"
 
     if args.command in ("encrypt", "decrypt"):
-        run_cli_operation(args)
+        try:
+            run_cli_operation(args)
+        except SystemExit:
+            raise
+        except Exception:
+            LOGGER.exception("CLI operation failed")
+            print(Fore.RED + "Operation failed. Check logs/encryptopi.log for details.")
+            raise SystemExit(1)
     elif args.self_test:
         try:
             print(Fore.CYAN + "Running self-test...")
