@@ -28,4 +28,5 @@ if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
 fi
 
 echo "Uninstall complete."
-echo "Note: Project data folders (keys/input/output/decrypted_output) were not removed."
+echo "Safety note: user data was preserved."
+echo "No keys, backups, input files, encrypted files, decrypted files, or logs were deleted."
