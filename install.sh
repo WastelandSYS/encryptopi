@@ -17,15 +17,27 @@ if [[ ! -f "${APP_SCRIPT}" ]]; then
   exit 1
 fi
 
-if ! command -v apt-get >/dev/null 2>&1; then
-  echo "This installer currently supports Debian/Raspberry Pi OS style systems with apt-get."
-  exit 1
+echo "[1/5] Installing dependencies..."
+if command -v apt-get >/dev/null 2>&1; then
+  echo "Detected apt-get. Installing Debian-family packages first..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y python3 python3-pip python3-venv python3-cryptography python3-colorama python3-tqdm
+else
+  echo "apt-get not found. Skipping system package install."
+  echo "You'll need Python 3 and dependencies from requirements.txt installed manually for your distro."
 fi
 
-echo "[1/5] Installing system dependencies..."
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-apt-get install -y python3 python3-pip python3-cryptography python3-colorama python3-tqdm
+echo "Checking Python dependencies from requirements.txt..."
+if python3 -m pip --version >/dev/null 2>&1; then
+  if ! python3 -m pip install --upgrade --no-input -r "${SCRIPT_DIR}/requirements.txt"; then
+    echo "pip dependency install failed. On Debian/Raspberry Pi OS/Kali, prefer system packages via apt."
+    exit 1
+  fi
+  echo "Python dependencies installed/verified."
+else
+  echo "pip not available. If EncryptoPI fails to start, install dependencies from requirements.txt manually."
+fi
 
 echo "[2/5] Ensuring executable permissions..."
 chmod +x "${APP_SCRIPT}"
@@ -79,3 +91,4 @@ if command -v encryptopi >/dev/null 2>&1; then
 else
   echo "Install completed, but encryptopi not found in PATH yet. Open a new terminal and run: encryptopi"
 fi
+echo "Installer note: existing project data (keys, backups, input, output, decrypted_output, logs) was not modified."
