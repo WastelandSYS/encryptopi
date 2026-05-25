@@ -1,103 +1,298 @@
-<img width="1536" height="1024" alt="f0d575f1-6db5-4a6f-8573-4cdcf4c115e2" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
+<img width="1536" height="1024" alt="encryptopi-banner" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
 
-# EncryptoPI - by WastelandSYS
+# encryptopi
 
+Advanced terminal-based file and folder encryption suite for Linux systems with Fernet + AES-256 encryption, key management, integrity verification, metadata handling, and secure batch operations.
 
-![Screenshot_2024-08-06_16-52-57-5](https://github.com/user-attachments/assets/c94d10f8-e364-4397-8b2e-c09281a3f702)
-![Screenshot_2024-08-06_16-54-49](https://github.com/user-attachments/assets/201c7106-4413-4030-b3cf-e1dc8156065a)
+---
 
+# FEATURES
 
+- Dual encryption support using Fernet and AES-256-GCM
+- Secure file and folder encryption/decryption workflows
+- AES-GCM authenticated encryption with tamper detection
+- Fernet encryption with automatic integrity validation
+- Batch encryption/decryption for entire folders
+- Recursive folder traversal support
+- SHA256 manifest-based integrity verification system
+- Persistent operations manifest logging
+- Key generation for both Fernet and AES encryption
+- Key metadata management and labeling system
+- Key backup and restore functionality
+- Secure key deletion workflow with confirmation protection
+- Compression support for input files and folders
+- Built-in self-test runtime verification mode
+- Interactive terminal menu system with colored output
+- Progress bars for large encryption/decryption operations
+- Desktop launcher integration for Raspberry Pi desktop environments
+- Structured logging system with operation tracking
 
+---
 
+# ENCRYPTION MODES
 
----------------------
+| Mode | Purpose |
+|------|----------|
+| Fernet | Simple authenticated symmetric encryption |
+| AES-256-GCM | Advanced authenticated encryption with tamper detection |
 
-![Screenshot_2024-08-06_16-54-12-1](https://github.com/user-attachments/assets/d0a77ec3-1641-44eb-bc62-7f90c6be8aa3)
-![Screenshot_2024-08-06_16-54-32](https://github.com/user-attachments/assets/974c10aa-ebda-4370-8332-5f2f91cc5ce7)
+Both encryption systems support secure file handling, batch operations, and manifest-based integrity tracking.
 
+---
 
+# SCREENSHOTS / INTERFACE
 
-
-
-
-Overview
-
-Encryptopi is an advanced Python script for encrypting and decrypting files and folders using both Fernet and AES encryption algorithms. It is designed to provide secure file handling with features such as key management, metadata handling, and file integrity checking. 
-
--------------------------------
-KEY FEATURES
-
-* Use either Fernet or AES for encryption/decryption
-* Generate Fernet and AES encryption keys
-* Encrypt and decrypt all files in a specified directory
-* Backup and restore encryption keys
-* Attach and view metadata for encryption keys
-* Verify file integrity with hashes
-* Manage multiple encryption keys
-* View existing encryption keys
-* Delete existing encryption keys
-* Move files and folders between designated directories for operations
-* Compress files (optional)
-* Provide help and usage instructions
-
---------------------------------
- 
-INSTALLATION & USAGE
-
-Git clone installation:
-
-1. 'git clone https://github.com/WastelandSYS/encryptopi.git'
-2. 'cd encryptopi'
-3. 'sudo chmod +x install.sh encryptopi.py'
-4. 'sudo ./install.sh'
-5. Exit and open a new terminal to use 'encryptopi' shortcut
-
-* The script will create input,output,decrypted_output, keys folders for you when launched for the first time
-  The key backup folder will be created when a backup is made for the first time.
-
-  Everything you put into the 'input' folder including ZIP folders and the contents of regular folders will be encrypted when the option is selected. The encrypted contents will then be auto copied over to the output folder. From there using 'decrypt' option will copy the decrypted versions to the 'decrypted_output' folder.
-
-* The 'decrypted_output folder is the input folder for the 'Check File Integrity' option.
-
--------------------------------
-
-DEPENDANCIES
-
-(The install.sh script should auto isntall these dependancies for you)
-
-    cryptography: For Fernet and AES encryption/decryption.
-    colorama: For colored terminal output.
-    tqdm: For progress bars.
-    json, os, sys, base64, hashlib, getpass, zipfile: Standard Python libraries.
-
--------------------------------
-
-This scipt has been tested on my RPI 4b running a kali linux arm.
-Enjoy and use responsibly
-
-
-## Improved installer behavior
-
-- Installs Python dependencies with `apt` (Raspberry Pi OS / Debian compatible).
-- Creates CLI shortcut at `/usr/local/bin/encryptopi`.
-- Creates app launcher at `/usr/share/applications/encryptopi.desktop`.
-- Attempts to create a desktop shortcut in the invoking user's `~/Desktop` when run with `sudo`, which improves Raspberry Pi desktop compatibility.
-
-### Uninstall
-
-Run:
+## Main Menu — Encryption Control Center
 
 ```bash
+encryptopi
+```
+
+---
+
+## Key Management & Encryption Workflow
+
+```bash
+encryptopi
+```
+
+<img width="707" height="585" alt="encryptopi-menu" src="https://github.com/user-attachments/assets/c94d10f8-e364-4397-8b2e-c09281a3f702" />
+
+---
+
+## AES & Fernet Encryption Operations
+
+```bash
+encryptopi
+```
+
+<img width="707" height="585" alt="encryptopi-encryption" src="https://github.com/user-attachments/assets/201c7106-4413-4030-b3cf-e1dc8156065a" />
+
+---
+
+## File Integrity & Key Management
+
+```bash
+encryptopi
+```
+
+<img width="707" height="585" alt="encryptopi-integrity" src="https://github.com/user-attachments/assets/d0a77ec3-1641-44eb-bc62-7f90c6be8aa3" />
+
+---
+
+## Backup & Restore Operations
+
+```bash
+encryptopi
+```
+
+<img width="707" height="585" alt="encryptopi-backup" src="https://github.com/user-attachments/assets/974c10aa-ebda-4370-8332-5f2f91cc5ce7" />
+
+---
+
+# INSTALLATION
+
+```bash
+git clone https://github.com/WastelandSYS/encryptopi.git
+cd encryptopi
+chmod +x install.sh uninstall.sh
+sudo ./install.sh
+```
+
+Launch with:
+
+```bash
+encryptopi
+```
+
+---
+
+# UNINSTALLATION
+
+```bash
+cd encryptopi
 sudo ./uninstall.sh
 ```
 
-This removes the command shortcut and desktop launchers, but keeps your keys/input/output data folders.
+The uninstaller removes:
+- `/usr/local/bin/encryptopi`
+- desktop launchers
+- application shortcuts
 
+Your project folders and encrypted data remain untouched.
 
-### Quick runtime check
+---
 
-You can verify the Python runtime and module initialization without entering the interactive menu:
+# USAGE
+
+Default launch:
+
+```bash
+encryptopi
+```
+
+Generate Fernet key:
+
+```bash
+encryptopi
+```
+
+Then select:
+
+```text
+2. Generate Fernet Key
+```
+
+Generate AES-256 key:
+
+```bash
+encryptopi
+```
+
+Then select:
+
+```text
+5. Generate AES Key
+```
+
+Run runtime self-test:
 
 ```bash
 python3 encryptopi.py --self-test --no-clear
 ```
+
+Encrypt a single file using Fernet (CLI mode):
+
+```bash
+python3 encryptopi.py encrypt --algo fernet --key mykey.key --infile example.txt
+```
+
+Decrypt a single file using Fernet:
+
+```bash
+python3 encryptopi.py decrypt --algo fernet --key mykey.key --infile example.txt.enc
+```
+
+Encrypt using AES-256-GCM:
+
+```bash
+python3 encryptopi.py encrypt --algo aes --key aeskey.key --infile example.txt
+```
+
+Decrypt AES-encrypted file:
+
+```bash
+python3 encryptopi.py decrypt --algo aes --key aeskey.key --infile example.txt.aes
+```
+
+Encrypt an entire folder recursively:
+
+```bash
+python3 encryptopi.py encrypt --algo aes --key aeskey.key --folder myfolder
+```
+
+Check manifest integrity:
+
+```bash
+encryptopi
+```
+
+Then select:
+
+```text
+12. Check File Integrity
+```
+
+---
+
+# DIRECTORY STRUCTURE
+
+encryptopi automatically creates and manages:
+
+```text
+input/
+output/
+decrypted_output/
+keys/
+key_backups/
+logs/
+```
+
+Workflow overview:
+
+- Place files/folders into `input/`
+- Encrypted outputs are written to `output/`
+- Decrypted outputs are written to `decrypted_output/`
+- Encryption keys are stored in `keys/`
+- Key backups are stored in `key_backups/`
+- Logs and manifests are stored in `logs/`
+
+---
+
+# SECURITY FEATURES
+
+- AES-256-GCM authenticated encryption
+- SHA256 integrity verification
+- Manifest-based operation tracking
+- Tamper detection during AES decryption
+- Automatic encryption/decryption logging
+- Key confirmation safety prompts
+- Backup-aware key management
+- Metadata tagging for key organization
+
+---
+
+# COMPATIBILITY
+
+Designed primarily for Linux systems.
+
+Tested on:
+
+- Raspberry Pi OS
+- Kali Linux ARM
+- Raspberry Pi 4B
+- Debian-based Linux systems
+
+Notes:
+
+- `install.sh` automatically installs required dependencies through `apt`
+- Desktop launcher support is included for Raspberry Pi desktop environments
+- The installer creates a global `encryptopi` command shortcut
+- AES operations use the `cryptography` Python package backend
+
+---
+
+# DEPENDENCIES
+
+Installed automatically by `install.sh`:
+
+- `cryptography`
+- `colorama`
+- `tqdm`
+
+---
+
+# WHY ENCRYPTOPI?
+
+encryptopi was built to provide a more organized, visual, and user-friendly encryption workflow for Linux and Raspberry Pi systems without sacrificing powerful functionality.
+
+The tool focuses on:
+- secure encryption workflows
+- clean terminal experience
+- organized key management
+- integrity verification
+- batch folder encryption
+- practical day-to-day usability
+- Raspberry Pi compatibility
+
+---
+
+# LICENSE
+
+(Coming soon)
+
+---
+
+# AUTHOR
+
+[WastelandSYS](https://github.com/WastelandSYS)
