@@ -225,7 +225,14 @@ Workflow overview:
 - Decrypted outputs are written to `decrypted_output/`
 - Encryption keys are stored in `keys/`
 - Key backups are stored in `key_backups/`
-- Logs and manifests are stored in `logs/`
+- Runtime logs are stored in `logs/`
+- `output/` stores encrypted files and `operations_manifest.jsonl`
+
+---
+
+# IMPORTANT KEY WARNING
+
+⚠️ WARNING: If encryption keys are lost, encrypted files cannot be recovered. Keep secure backups of your key files.
 
 ---
 
@@ -255,7 +262,8 @@ Tested on:
 
 Notes:
 
-- `install.sh` automatically installs required dependencies through `apt`
+- `install.sh` prefers system dependencies via `apt` on Debian/Raspberry Pi OS/Kali
+- If `apt-get` is unavailable, installer prints guidance and falls back to pip when available
 - Desktop launcher support is included for Raspberry Pi desktop environments
 - The installer creates a global `encryptopi` command shortcut
 - AES operations use the `cryptography` Python package backend
