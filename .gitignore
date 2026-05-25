@@ -1,0 +1,10 @@
+keys/
+key_backups/
+input/
+output/
+decrypted_output/
+logs/
+*.key
+*_metadata.json
+__pycache__/
+*.pyc
