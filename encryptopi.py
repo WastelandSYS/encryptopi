@@ -16,6 +16,8 @@ import base64
 import hashlib
 import zipfile
 import logging
+import contextlib
+import io
 from dataclasses import dataclass
 
 # Initialize colorama
@@ -73,6 +75,20 @@ def setup_logger():
 
 LOGGER = setup_logger()
 
+
+def info(msg):
+    print(Fore.CYAN + f"[INFO] {msg}")
+
+def success(msg):
+    print(Fore.GREEN + f"[OK] {msg}")
+
+def warning(msg):
+    print(Fore.YELLOW + f"[WARN] {msg}")
+
+def error(msg):
+    print(Fore.RED + f"[ERROR] {msg}")
+
+
 def safe_output_path(base_dir, rel_path, suffix):
     rel = Path(rel_path)
     target = base_dir / rel.parent / (rel.name + suffix)
@@ -100,12 +116,12 @@ def key_metadata_value(key_filename):
 def verify_manifest_integrity(manifest_path=None):
     manifest_path = Path(manifest_path) if manifest_path else (STATE.output_dir / "operations_manifest.jsonl")
     if not manifest_path.exists():
-        print(Fore.RED + "No operations manifest found.")
+        error("No operations manifest found.")
         return False
     ok = True
     pass_count = 0
     fail_count = 0
-    print(Fore.CYAN + "Verifying manifest outputs...")
+    info("Verifying manifest outputs...")
     for i, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
@@ -114,27 +130,27 @@ def verify_manifest_integrity(manifest_path=None):
             out = Path(entry.get("output_path", ""))
             expected = entry.get("output_sha256")
             if not out.exists():
-                print(Fore.RED + f"FAIL [{i}] missing: {out}")
+                error(f"FAIL [{i}] missing: {out}")
                 LOGGER.error("Manifest verify fail [line %s]: missing output %s", i, out)
                 ok = False
                 fail_count += 1
                 continue
             actual = calculate_hash(out)
             if actual == expected:
-                print(Fore.GREEN + f"PASS [{i}] {out}")
+                success(f"PASS [{i}] {out}")
                 pass_count += 1
             else:
-                print(Fore.RED + f"FAIL [{i}] hash mismatch: {out}")
+                error(f"FAIL [{i}] hash mismatch: {out}")
                 LOGGER.error("Manifest verify fail [line %s]: hash mismatch for %s (expected=%s actual=%s)", i, out, expected, actual)
                 ok = False
                 fail_count += 1
         except Exception as e:
-            print(Fore.RED + f"FAIL [{i}] invalid manifest entry: {e}")
+            warning(f"Skipping invalid manifest entry on line {i}.")
             LOGGER.exception("Manifest verify invalid entry [line %s]", i)
             ok = False
             fail_count += 1
-    print(Fore.CYAN + f"Manifest verification summary: PASS={pass_count} FAIL={fail_count}")
-    print(Fore.GREEN + "Overall result: PASS" if ok else Fore.RED + "Overall result: FAIL")
+    info(f"Manifest verification summary: PASS={pass_count} FAIL={fail_count}")
+    success("Overall result: PASS") if ok else error("Overall result: FAIL")
     return ok
 
 def detect_key_type(key_data):
@@ -178,14 +194,15 @@ def generate_key():
         key_filename = STATE.keys_dir / (f"key_{base64.urlsafe_b64encode(key).decode('utf-8')[:10]}.key")
         with open(key_filename, "wb") as key_file:
             key_file.write(key)
-        print(Fore.GREEN + f"Key generated and saved as {key_filename}")
+        success(f"Key generated and saved as {key_filename}")
     except Exception as e:
-        print(Fore.RED + f"Error generating key: {e}")
+        LOGGER.exception("generate_key failed")
+        error("Error generating key.")
 
 # Function to show available keys
 def show_keys():
     try:
-        print(Fore.CYAN + "Available keys:")
+        info("Available keys:")
         for key_file in sorted(STATE.keys_dir.iterdir()):
             if key_file.suffix == ".key":
                 key_data = load_key(key_file.name)
@@ -193,25 +210,25 @@ def show_keys():
                 meta = "yes" if get_metadata_path(key_file.name).exists() else "no"
                 bkp = "yes" if (STATE.backup_dir / key_file.name).exists() else "no"
                 mod = key_file.stat().st_mtime
-                from datetime import datetime
                 mstr = datetime.fromtimestamp(mod).strftime("%Y-%m-%d %H:%M")
                 print(f" - {key_file.name:<32} [{key_type:<10}]  Metadata: {'Yes' if meta == 'yes' else 'No'}  Backup: {'Yes' if bkp == 'yes' else 'No'}  Modified: {mstr}")
     except Exception as e:
         LOGGER.exception("show_keys failed")
-        print(Fore.RED + f"Error showing keys: {e}")
+        error("Error showing keys.")
 
 # Function to load a key
 def load_key(key_filename):
     try:
         key_path = STATE.keys_dir / key_filename
         if not key_path.is_file():
-            print(Fore.RED + "Invalid key file")
+            error("Key file not found.")
             return None
         with open(key_path, "rb") as key_file:
             key_data = key_file.read()
         return key_data
-    except Exception as e:
-        print(Fore.RED + f"Error loading key: {e}")
+    except Exception:
+        LOGGER.exception("load_key failed for %s", key_filename)
+        error("Error loading key.")
         return None
 
 
@@ -234,8 +251,9 @@ def calculate_hash(file_path):
             for block in iter(lambda: f.read(4096), b""):
                 hasher.update(block)
         return hasher.hexdigest()
-    except Exception as e:
-        print(Fore.RED + f"Error calculating hash for {file_path}: {e}")
+    except Exception:
+        LOGGER.exception("calculate_hash failed for %s", file_path)
+        error(f"Error calculating hash for {file_path}.")
         return None
 
 # Function to encrypt a file using Fernet
@@ -251,11 +269,11 @@ def encrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None, 
         with open(encrypted_file_path, "wb") as file:
             file.write(encrypted_data)
         write_manifest(build_manifest_entry("encrypt", "Fernet", file_path, encrypted_file_path, key_name), manifest_path=manifest_path)
-        print(Fore.GREEN + f"Encrypted {file_path.name} to {encrypted_file_path.name}")
+        success(f"Encrypted {file_path.name} to {encrypted_file_path.name}")
         return encrypted_file_path
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Fernet encrypt failed for %s", file_path)
-        print(Fore.RED + f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        error(f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
         return None
 
 # Function to decrypt a file using Fernet
@@ -273,10 +291,12 @@ def decrypt_file_fernet(file_path, key, key_name="unknown", manifest_path=None, 
         with open(decrypted_file_path, "wb") as file:
             file.write(decrypted_data)
         write_manifest(build_manifest_entry("decrypt", "Fernet", file_path, decrypted_file_path, key_name), manifest_path=manifest_path)
-        print(Fore.GREEN + f"Decrypted {file_path.name} to {target_decrypt_dir}")
+        success(f"Decrypted {file_path.name} to {target_decrypt_dir}")
+        return decrypted_file_path
     except Exception as e:
         LOGGER.exception("Fernet decrypt failed for %s", file_path)
-        print(Fore.RED + f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        error(f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        return None
 
 # Function to handle encryption of multiple or all files
 def encrypt_files():
@@ -285,30 +305,39 @@ def encrypt_files():
         key_filename = input(Fore.CYAN + "Enter the Fernet key filename to use (from above): ").strip()
         key = load_key(key_filename)
         if key is None or len(key) != 44:
-            print(Fore.RED + "Invalid Fernet key.")
+            error("Wrong key type selected. Expected a Fernet key.")
             return
         if key is None:
             return
         
-        files_to_encrypt = list(STATE.input_dir.rglob('*'))  # Use rglob for subdirectory traversal
-        print(Fore.YELLOW + "Encrypting files...")
+        files_to_encrypt = [p for p in STATE.input_dir.rglob("*") if p.is_file()]
+        if not files_to_encrypt:
+            warning("No files found to encrypt.")
+            return
+        info("Encrypting files...")
+        ok_count, fail_count = 0, 0
         for file_path in tqdm(files_to_encrypt, desc="Encrypting", unit="file"):
-            if file_path.is_file():
-                original_hash = calculate_hash(file_path)
-                encrypted_file_path = encrypt_file_fernet(file_path, key, key_filename)
-                if not encrypted_file_path:
-                    continue
-                rel = file_path.relative_to(STATE.input_dir) if STATE.input_dir in file_path.parents else Path(file_path.name)
-                decrypt_file_fernet(encrypted_file_path, key, key_filename)  # Decrypt to verify integrity
-                decrypted_file_path = STATE.decrypt_output_dir / rel
-                decrypted_hash = calculate_hash(decrypted_file_path)
-                if original_hash != decrypted_hash:
-                    print(Fore.RED + f"Integrity check failed for {file_path.name}")
-                if decrypted_file_path.exists():
-                    os.remove(decrypted_file_path)  # Remove decrypted file after integrity check
-    except Exception as e:
+            original_hash = calculate_hash(file_path)
+            encrypted_file_path = encrypt_file_fernet(file_path, key, key_filename)
+            if not encrypted_file_path:
+                fail_count += 1
+                continue
+            ok_count += 1
+            rel = file_path.relative_to(STATE.input_dir) if STATE.input_dir in file_path.parents else Path(file_path.name)
+            decrypt_file_fernet(encrypted_file_path, key, key_filename)
+            decrypted_file_path = STATE.decrypt_output_dir / rel
+            decrypted_hash = calculate_hash(decrypted_file_path)
+            if original_hash != decrypted_hash:
+                warning(f"Integrity check failed for {file_path.name}")
+            if decrypted_file_path.exists():
+                os.remove(decrypted_file_path)
+        info(f"Encryption summary: succeeded={ok_count} failed={fail_count}")
+    except KeyboardInterrupt:
+        LOGGER.info("encrypt_files interrupted by user")
+        warning("Operation interrupted by user.")
+    except Exception:
         LOGGER.exception("encrypt_files failed")
-        print(Fore.RED + f"Error encrypting files: {e}")
+        error("Error encrypting files.")
 
 # Function to handle decryption of multiple or all files
 def decrypt_files():
@@ -317,41 +346,53 @@ def decrypt_files():
         key_filename = input(Fore.CYAN + "Enter the Fernet key filename to use (from above): ").strip()
         key = load_key(key_filename)
         if key is None or len(key) != 44:
-            print(Fore.RED + "Invalid Fernet key.")
+            error("Wrong key type selected. Expected a Fernet key.")
             return
         if key is None:
             return
-        encrypted_files = list(STATE.output_dir.rglob('*.enc'))
-        print(Fore.YELLOW + "Decrypting files...")
+        encrypted_files = [p for p in STATE.output_dir.rglob("*.enc") if p.is_file()]
+        if not encrypted_files:
+            warning("No encrypted files found.")
+            return
+        info("Decrypting files...")
+        ok_count, fail_count = 0, 0
         for file_path in tqdm(encrypted_files, desc="Decrypting", unit="file"):
-            if file_path.is_file():
-                decrypt_file_fernet(file_path, key, key_filename)
-    except Exception as e:
+            result = decrypt_file_fernet(file_path, key, key_filename)
+            if result is None: fail_count += 1
+            else: ok_count += 1
+        info(f"Decryption summary: succeeded={ok_count} failed={fail_count}")
+    except KeyboardInterrupt:
+        LOGGER.info("decrypt_files interrupted by user")
+        warning("Operation interrupted by user.")
+    except Exception:
         LOGGER.exception("decrypt_files failed")
-        print(Fore.RED + f"Error decrypting files: {e}")
+        error("Error decrypting files.")
 
 # Function to check file integrity
 def check_file_integrity():
     try:
-        print(Fore.CYAN + "Checking file integrity against manifest...")
+        info("Checking file integrity against manifest...")
         verify_manifest_integrity()
-    except Exception as e:
+    except Exception:
         LOGGER.exception("integrity check failed")
-        print(Fore.RED + f"Error checking file integrity: {e}")
+        error("Error checking file integrity.")
 
 # Function to compress files
 def compress_files():
     try:
-        print(Fore.CYAN + "Compressing files...")
-        zip_file_path = STATE.output_dir / "files.zip"  # Save ZIP file to OUTPUT_DIR
+        info("Compressing files...")
+        files_to_compress = [p for p in STATE.input_dir.rglob('*') if p.is_file()]
+        if not files_to_compress:
+            warning("No files found to compress.")
+            return
+        zip_file_path = STATE.output_dir / "files.zip"
         with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file in STATE.input_dir.rglob('*'):  # Use rglob to include all files in subdirectories
-                if file.is_file():
-                    zipf.write(file, file.relative_to(STATE.input_dir))
-        print(Fore.GREEN + f"Files compressed to {zip_file_path}")
+            for file in files_to_compress:
+                zipf.write(file, file.relative_to(STATE.input_dir))
+        success(f"Files compressed to {zip_file_path}")
     except Exception as e:
         LOGGER.exception("compress_files failed")
-        print(Fore.RED + f"Error compressing files: {e}")
+        error("Error compressing files.")
 
 # Function to add metadata to a Fernet key file
 def add_key_metadata():
@@ -360,7 +401,7 @@ def add_key_metadata():
         key_filename = input(Fore.CYAN + "Enter the key filename to add metadata to (from above): ")
         key_file_path = STATE.keys_dir / key_filename
         if not key_file_path.is_file():
-            print(Fore.RED + "Invalid key file")
+            error("Key file not found.")
             return
         
         metadata = input(Fore.CYAN + "Enter metadata to add: ")
@@ -376,10 +417,10 @@ def add_key_metadata():
         with open(metadata_path, "w") as metadata_file:
             json.dump(metadata_dict, metadata_file)
 
-        print(Fore.GREEN + f"Metadata added to {metadata_filename}")
+        success(f"Metadata added to {metadata_filename}")
     except Exception as e:
         LOGGER.exception("add_key_metadata failed")
-        print(Fore.RED + f"Error adding metadata to Fernet key: {e}")
+        error("Error adding metadata to Fernet key.")
 
 # Function to view metadata of a Fernet key file
 def view_key_metadata():
@@ -389,16 +430,16 @@ def view_key_metadata():
         metadata_filename = key_filename.replace('.key', '_metadata.json')
         metadata_path = get_metadata_path(key_filename)
         if not metadata_path.is_file():
-            print(Fore.RED + "No metadata found for the selected key")
+            warning("No metadata found for the selected key")
             return
 
         with open(metadata_path, "r") as metadata_file:
             metadata_dict = json.load(metadata_file)
         
-        print(Fore.CYAN + f"Metadata for {key_filename}: {metadata_dict.get('metadata', 'No metadata available')}")
+        info(f"Metadata for {key_filename}: {metadata_dict.get('metadata', 'No metadata available')}")
     except Exception as e:
         LOGGER.exception("view_key_metadata failed")
-        print(Fore.RED + f"Error viewing metadata of Fernet key: {e}")
+        error("Error viewing metadata of Fernet key.")
 
 # Function to delete a key
 def delete_key():
@@ -407,15 +448,15 @@ def delete_key():
         key_filename = input(Fore.CYAN + "Enter the key filename to delete (from above): ")
         key_file_path = STATE.keys_dir / key_filename
         if not key_file_path.is_file():
-            print(Fore.RED + "Invalid key file")
+            error("Key file not found.")
             return
         key_data = load_key(key_filename)
         ktype = detect_key_type(key_data) if key_data else "Unknown"
         meta = key_metadata_value(key_filename)
-        print(Fore.YELLOW + f"Selected key: {key_filename} | Type: {ktype} | Metadata: {meta}")
+        warning(f"Selected key: {key_filename} | Type: {ktype} | Metadata: {meta}")
         confirm = input(Fore.CYAN + "Type the exact key filename to confirm deletion: ").strip()
         if confirm != key_filename:
-            print(Fore.RED + "Confirmation mismatch. Deletion cancelled.")
+            warning("Confirmation mismatch. Deletion cancelled.")
             return
         metadata_path = get_metadata_path(key_filename)
         remove_related = input(Fore.CYAN + "Also delete related metadata and backup copy? (y/N): ").strip().lower() == "y"
@@ -426,10 +467,10 @@ def delete_key():
             backup_path = STATE.backup_dir / key_filename
             if backup_path.exists():
                 backup_path.unlink()
-        print(Fore.GREEN + f"Key {key_filename} deleted.")
+        success(f"Key {key_filename} deleted.")
     except Exception as e:
         LOGGER.exception("delete_key failed")
-        print(Fore.RED + f"Error deleting key: {e}")
+        error("Error deleting key.")
         
 # Function to back up keys
 def backup_keys():
@@ -438,28 +479,28 @@ def backup_keys():
             if key_file.suffix in [".key", ".json"] and (key_file.suffix == ".key" or key_file.name.endswith("_metadata.json")):
                 backup_file = STATE.backup_dir / key_file.name
                 backup_file.write_bytes(key_file.read_bytes())
-                print(Fore.GREEN + f"Backed up: {key_file.name}")
-        print(Fore.GREEN + "Backup operation completed.")
+                success(f"Backed up: {key_file.name}")
+        success("Backup operation completed.")
     except Exception as e:
         LOGGER.exception("backup_keys failed")
-        print(Fore.RED + f"Error backing up keys: {e}")
+        error("Error backing up keys.")
         
 # Function to restore keys from backup
 def restore_keys():
     try:
         if not STATE.backup_dir.is_dir():
-            print(Fore.RED + "Backup directory does not exist.")
+            error("Backup directory does not exist.")
             return
         
         for backup_file in sorted(STATE.backup_dir.iterdir()):
             if backup_file.suffix in [".key", ".json"] and (backup_file.suffix == ".key" or backup_file.name.endswith("_metadata.json")):
                 restored = STATE.keys_dir / backup_file.name
                 restored.write_bytes(backup_file.read_bytes())
-                print(Fore.GREEN + f"Restored: {backup_file.name}")
-        print(Fore.GREEN + "Restore operation completed.")
+                success(f"Restored: {backup_file.name}")
+        success("Restore operation completed.")
     except Exception as e:
         LOGGER.exception("restore_keys failed")
-        print(Fore.RED + f"Error restoring keys: {e}")
+        error("Error restoring keys.")
         
 def generate_aes_key():
     try:
@@ -467,10 +508,10 @@ def generate_aes_key():
         key_filename = STATE.keys_dir / (f"aes_key_{base64.urlsafe_b64encode(key).decode('utf-8')[:10]}.key")
         with open(key_filename, "wb") as key_file:
             key_file.write(key)
-        print(Fore.GREEN + f"AES Key generated and saved as {key_filename}")
-    except Exception as e:
+        success(f"AES Key generated and saved as {key_filename}")
+    except Exception:
         LOGGER.exception("generate_aes_key failed")
-        print(Fore.RED + f"Error generating AES key: {e}")        
+        error("Error generating AES key.")        
         
 def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path=None, output_dir=None):
     try:
@@ -490,11 +531,11 @@ def encrypt_files_aes_with_key(file_path, key, key_name="unknown", manifest_path
         with open(encrypted_file_path, "wb") as file:
             file.write(encrypted_data)
         write_manifest(build_manifest_entry("encrypt", "AES-GCM-v1", file_path, encrypted_file_path, key_name), manifest_path=manifest_path)
-        print(Fore.GREEN + f"Encrypted {file_path.name} to {encrypted_file_path.name}")
+        success(f"Encrypted {file_path.name} to {encrypted_file_path.name}")
         return encrypted_file_path
-    except Exception as e:
+    except Exception:
         LOGGER.exception("AES encrypt failed for %s", file_path)
-        print(Fore.RED + f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        error(f"Error encrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
         return None
 
 def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None, decrypt_output_dir=None):
@@ -527,13 +568,16 @@ def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None, dec
             file.write(decrypted_data)
         algo = "AES-GCM-v1" if encrypted_data.startswith(b"GCM1") else "AES-CFB-legacy"
         write_manifest(build_manifest_entry("decrypt", algo, file_path, decrypted_file_path, key_name), manifest_path=manifest_path)
-        print(Fore.GREEN + f"Decrypted {file_path.name} to {decrypted_file_path.name}")
+        success(f"Decrypted {file_path.name} to {decrypted_file_path.name}")
+        return decrypted_file_path
     except InvalidTag:
         LOGGER.exception("AES decrypt authentication failed for %s", file_path)
-        print(Fore.RED + "Error decrypting file: authentication failed (data tampered or wrong key).")
+        error("Error decrypting file: authentication failed (data tampered or wrong key).")
+        return None
     except Exception as e:
         LOGGER.exception("AES decrypt failed for %s", file_path)
-        print(Fore.RED + f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        error(f"Error decrypting file {file_path}: operation failed (details written to logs/encryptopi.log).")
+        return None
 
 def encrypt_files_aes():
     try:
@@ -541,17 +585,25 @@ def encrypt_files_aes():
         key_filename = input(Fore.CYAN + "Enter the AES key filename to use (from above): ").strip()
         key = load_key(key_filename)
         if key is None or len(key) != 32:
-            print(Fore.RED + "Invalid AES key.")
+            error("Wrong key type selected. Expected a 32-byte AES key.")
             return
         
-        files_to_encrypt = list(STATE.input_dir.rglob('*'))
-        print(Fore.YELLOW + "Encrypting files...")
+        files_to_encrypt = [p for p in STATE.input_dir.rglob("*") if p.is_file()]
+        if not files_to_encrypt:
+            warning("No files found to encrypt.")
+            return
+        info("Encrypting files...")
+        ok_count, fail_count = 0, 0
         for file_path in tqdm(files_to_encrypt, desc="Encrypting", unit="file"):
-            if file_path.is_file():
-                encrypt_files_aes_with_key(file_path, key, key_filename)
-    except Exception as e:
+            if encrypt_files_aes_with_key(file_path, key, key_filename): ok_count += 1
+            else: fail_count += 1
+        info(f"Encryption summary: succeeded={ok_count} failed={fail_count}")
+    except KeyboardInterrupt:
+        LOGGER.info("encrypt_files_aes interrupted by user")
+        warning("Operation interrupted by user.")
+    except Exception:
         LOGGER.exception("encrypt_files_aes failed")
-        print(Fore.RED + f"Error encrypting files: {e}")
+        error("Error encrypting files.")
 
 def decrypt_files_aes():
     try:
@@ -559,51 +611,85 @@ def decrypt_files_aes():
         key_filename = input(Fore.CYAN + "Enter the AES key filename to use (from above): ").strip()
         key = load_key(key_filename)
         if key is None or len(key) != 32:
-            print(Fore.RED + "Invalid AES key.")
+            error("Wrong key type selected. Expected a 32-byte AES key.")
             return
-        encrypted_files = list(STATE.output_dir.rglob('*.aes'))
-        print(Fore.YELLOW + "Decrypting files...")
+        encrypted_files = [p for p in STATE.output_dir.rglob("*.aes") if p.is_file()]
+        if not encrypted_files:
+            warning("No encrypted files found.")
+            return
+        info("Decrypting files...")
+        ok_count, fail_count = 0, 0
         for file_path in tqdm(encrypted_files, desc="Decrypting", unit="file"):
-            if file_path.is_file():
-                decrypt_file_aes(file_path, key, key_filename)
-    except Exception as e:
+            result = decrypt_file_aes(file_path, key, key_filename)
+            if result is None:
+                fail_count += 1
+            else:
+                ok_count += 1
+        info(f"Decryption summary: succeeded={ok_count} failed={fail_count}")
+    except KeyboardInterrupt:
+        LOGGER.info("decrypt_files_aes interrupted by user")
+        warning("Operation interrupted by user.")
+    except Exception:
         LOGGER.exception("decrypt_files_aes failed")
-        print(Fore.RED + f"Error decrypting files: {e}")
+        error("Error decrypting files.")
 
 def run_cli_operation(args):
-    key = load_key(args.key)
-    if key is None:
-        raise SystemExit(2)
-    if args.infile and args.folder:
-        raise SystemExit("Error: use either --infile or --folder, not both.")
-    if not args.infile and not args.folder:
-        raise SystemExit("Error: provide exactly one of --infile or --folder.")
-    if args.infile:
-        infile_path = Path(args.infile)
-        if not infile_path.is_file():
-            raise SystemExit(f"Error: file does not exist: {infile_path}")
-        targets = [infile_path]
-    else:
-        folder_path = Path(args.folder)
-        if not folder_path.is_dir():
-            raise SystemExit(f"Error: folder does not exist: {folder_path}")
-        targets = [p for p in folder_path.rglob("*") if p.is_file()]
-    if args.algo == "fernet":
-        if len(key) != 44:
-            raise SystemExit("Error: wrong key type. Fernet operations require a Fernet key (44-byte base64 key file).")
-        for t in targets:
-            if args.command == "encrypt":
-                encrypt_file_fernet(t, key, args.key)
-            else:
-                decrypt_file_fernet(t, key, args.key)
-    else:
-        if len(key) != 32:
-            raise SystemExit("Error: wrong key type. AES operations require a 32-byte AES key file.")
-        for t in targets:
-            if args.command == "encrypt":
-                encrypt_files_aes_with_key(t, key, args.key)
-            else:
-                decrypt_file_aes(t, key, args.key)
+    try:
+        key = load_key(args.key)
+        if key is None:
+            raise SystemExit(2)
+        if args.infile and args.folder:
+            raise SystemExit("Error: use either --infile or --folder, not both.")
+        if not args.infile and not args.folder:
+            raise SystemExit("Error: provide exactly one of --infile or --folder.")
+        if args.infile:
+            infile_path = Path(args.infile)
+            if not infile_path.is_file():
+                raise SystemExit(f"Error: file does not exist: {infile_path}")
+            targets = [infile_path]
+        else:
+            folder_path = Path(args.folder)
+            if not folder_path.is_dir():
+                raise SystemExit(f"Error: folder does not exist: {folder_path}")
+            targets = [p for p in folder_path.rglob("*") if p.is_file()]
+            if not targets:
+                raise SystemExit(f"Error: no files found in folder: {folder_path}")
+        success_count = 0
+        fail_count = 0
+        if args.algo == "fernet":
+            if len(key) != 44:
+                raise SystemExit("Error: wrong key type. Fernet operations require a Fernet key (44-byte base64 key file).")
+            for t in targets:
+                if args.command == "encrypt":
+                    result = encrypt_file_fernet(t, key, args.key)
+                else:
+                    result = decrypt_file_fernet(t, key, args.key)
+                if result is None:
+                    fail_count += 1
+                else:
+                    success_count += 1
+        else:
+            if len(key) != 32:
+                raise SystemExit("Error: wrong key type. AES operations require a 32-byte AES key file.")
+            for t in targets:
+                if args.command == "encrypt":
+                    result = encrypt_files_aes_with_key(t, key, args.key)
+                else:
+                    result = decrypt_file_aes(t, key, args.key)
+                if result is None:
+                    fail_count += 1
+                else:
+                    success_count += 1
+        info("CLI operation completed.")
+        success(f"Succeeded: {success_count}")
+        if fail_count > 0:
+            warning(f"Failed: {fail_count}")
+        else:
+            success("Failed: 0")
+    except KeyboardInterrupt:
+        LOGGER.info("CLI operation interrupted by user")
+        warning("Operation interrupted by user.")
+        raise SystemExit(130)
 
 def run_extended_self_test():
     with tempfile.TemporaryDirectory() as td:
@@ -616,13 +702,15 @@ def run_extended_self_test():
         tpath.write_text("encryptopi-self-test")
         fkey = Fernet.generate_key()
         akey = os.urandom(32)
-        f_enc = encrypt_file_fernet(tpath, fkey, "selftest_fernet", manifest_path=manifest_path, output_dir=test_output_dir)
-        decrypt_file_fernet(f_enc, fkey, "selftest_fernet", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
-        a_enc = encrypt_files_aes_with_key(tpath, akey, "selftest_aes", manifest_path=manifest_path, output_dir=test_output_dir)
-        decrypt_file_aes(a_enc, akey, "selftest_aes", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
+        with contextlib.redirect_stdout(io.StringIO()):
+            f_enc = encrypt_file_fernet(tpath, fkey, "selftest_fernet", manifest_path=manifest_path, output_dir=test_output_dir)
+            decrypt_file_fernet(f_enc, fkey, "selftest_fernet", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
+            a_enc = encrypt_files_aes_with_key(tpath, akey, "selftest_aes", manifest_path=manifest_path, output_dir=test_output_dir)
+            decrypt_file_aes(a_enc, akey, "selftest_aes", manifest_path=manifest_path, decrypt_output_dir=test_decrypt_dir)
+            manifest_ok = verify_manifest_integrity(manifest_path=manifest_path)
         if calculate_hash(tpath) != calculate_hash(test_decrypt_dir / tpath.name):
             raise RuntimeError("Roundtrip hash mismatch")
-        if not verify_manifest_integrity(manifest_path=manifest_path):
+        if not manifest_ok:
             raise RuntimeError("Self-test manifest verification failed")
         for p in [f_enc, a_enc, test_decrypt_dir / tpath.name]:
             if p and Path(p).exists():
@@ -638,7 +726,7 @@ def add_aes_key_metadata():
         key_filename = input(Fore.CYAN + "Enter the AES key filename to add metadata to (from above): ")
         key_file_path = STATE.keys_dir / key_filename
         if not key_file_path.is_file():
-            print(Fore.RED + "Invalid key file")
+            error("Key file not found.")
             return
         
         metadata = input(Fore.CYAN + "Enter metadata to add: ")
@@ -654,9 +742,10 @@ def add_aes_key_metadata():
         with open(metadata_path, "w") as metadata_file:
             json.dump(metadata_dict, metadata_file)
 
-        print(Fore.GREEN + f"Metadata added to {metadata_filename}")
+        success(f"Metadata added to {metadata_filename}")
     except Exception as e:
-        print(Fore.RED + f"Error adding metadata to AES key: {e}")
+        LOGGER.exception("add_aes_key_metadata failed")
+        error("Error adding metadata to AES key.")
 
 # Function to view metadata of an AES key file
 def view_aes_key_metadata():
@@ -666,35 +755,17 @@ def view_aes_key_metadata():
         metadata_filename = key_filename.replace('.key', '_metadata.json')
         metadata_path = get_metadata_path(key_filename)
         if not metadata_path.is_file():
-            print(Fore.RED + "No metadata found for the selected key")
+            warning("No metadata found for the selected key")
             return
 
         with open(metadata_path, "r") as metadata_file:
             metadata_dict = json.load(metadata_file)
         
-        print(Fore.CYAN + f"Metadata for {key_filename}: {metadata_dict.get('metadata', 'No metadata available')}")
+        info(f"Metadata for {key_filename}: {metadata_dict.get('metadata', 'No metadata available')}")
     except Exception as e:
-        print(Fore.RED + f"Error viewing metadata of AES key: {e}")
+        LOGGER.exception("view_aes_key_metadata failed")
+        error("Error viewing metadata of AES key.")
         
-# Function to load an AES key without reading metadata
-def load_aes_key(key_filename):
-    try:
-        key_path = STATE.keys_dir / key_filename
-        if not key_path.is_file():
-            print(Fore.RED + "Invalid key file")
-            return None
-        with open(key_path, "rb") as key_file:
-            key_data = key_file.read()
-        # Ensure key length is correct
-        if len(key_data) != 32:
-            print(Fore.RED + "Loaded key length is incorrect")
-            return None
-        return key_data
-    except Exception as e:
-        print(Fore.RED + f"Error loading AES key: {e}")
-        return None        
-
-
 
 # Function to display the help section
 def display_help():
@@ -815,48 +886,53 @@ def display_menu():
 
 def main_menu():
     while True:
-        display_menu()
-        choice = input(Fore.CYAN + " Enter your choice: ")
-        if choice == '1':
-            show_keys()
-        elif choice == '2':
-            generate_key()
-        elif choice == '3':
-            add_key_metadata()
-        elif choice == '4':
-            view_key_metadata()
-        elif choice == '5':
-            generate_aes_key()
-        elif choice == '6':
-            add_aes_key_metadata()
-        elif choice == '7':
-            view_aes_key_metadata()
-        elif choice == '8':
-            encrypt_files()
-        elif choice == '9':
-            decrypt_files()
-        elif choice == '10':
-            encrypt_files_aes()
-        elif choice == '11':
-            decrypt_files_aes()
-        elif choice == '12':
-            check_file_integrity()
-        elif choice == '13':
-            compress_files()
-        elif choice == '14':
-            backup_keys()
-        elif choice == '15':
-            restore_keys()
-        elif choice == '16':
-            delete_key()
-        elif choice == '0':
-            print(Fore.GREEN + "Exiting...")
+        try:
+            display_menu()
+            choice = input(Fore.CYAN + " Enter your choice: ")
+            if choice == '1':
+                show_keys()
+            elif choice == '2':
+                generate_key()
+            elif choice == '3':
+                add_key_metadata()
+            elif choice == '4':
+                view_key_metadata()
+            elif choice == '5':
+                generate_aes_key()
+            elif choice == '6':
+                add_aes_key_metadata()
+            elif choice == '7':
+                view_aes_key_metadata()
+            elif choice == '8':
+                encrypt_files()
+            elif choice == '9':
+                decrypt_files()
+            elif choice == '10':
+                encrypt_files_aes()
+            elif choice == '11':
+                decrypt_files_aes()
+            elif choice == '12':
+                check_file_integrity()
+            elif choice == '13':
+                compress_files()
+            elif choice == '14':
+                backup_keys()
+            elif choice == '15':
+                restore_keys()
+            elif choice == '16':
+                delete_key()
+            elif choice == '0':
+                success("Exiting...")
+                break
+            elif choice == 'h' or choice.lower() == 'help':
+                display_help()
+            else:
+                error("Invalid choice. Please try again.")
+            input(Fore.CYAN + "Press Enter to return to the main menu...")
+        except KeyboardInterrupt:
+            LOGGER.info("main_menu interrupted by user")
+            warning("Operation interrupted by user.")
             break
-        elif choice == 'h' or choice.lower() == 'help':
-            display_help()
-        else:
-            print(Fore.RED + "Invalid choice. Please try again.")
-        input(Fore.CYAN + "Press Enter to return to the main menu...")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EncryptoPI encryption/decryption tool")
@@ -877,15 +953,19 @@ if __name__ == "__main__":
     if args.command in ("encrypt", "decrypt"):
         try:
             run_cli_operation(args)
+        except KeyboardInterrupt:
+            LOGGER.info("CLI mode interrupted by user")
+            warning("Operation interrupted by user.")
+            raise SystemExit(130)
         except SystemExit:
             raise
         except Exception:
             LOGGER.exception("CLI operation failed")
-            print(Fore.RED + "Operation failed. Check logs/encryptopi.log for details.")
+            error("Operation failed. Check logs/encryptopi.log for details.")
             raise SystemExit(1)
     elif args.self_test:
         try:
-            print(Fore.CYAN + "Running self-test...")
+            print("Running self-test...")
             LOGGER.info("Self-test started")
             for directory in [STATE.keys_dir, STATE.input_dir, STATE.output_dir, STATE.decrypt_output_dir]:
                 directory.mkdir(parents=True, exist_ok=True)
@@ -894,11 +974,15 @@ if __name__ == "__main__":
             if not test_hash:
                 raise RuntimeError("Failed to calculate script hash")
             run_extended_self_test()
-            print(Fore.GREEN + "Self-test passed.")
+            print("Self-test passed.")
             LOGGER.info("Self-test passed")
-        except Exception as e:
+        except KeyboardInterrupt:
+            LOGGER.info("self-test interrupted by user")
+            warning("Operation interrupted by user.")
+            raise SystemExit(130)
+        except Exception:
             LOGGER.exception("self-test failed")
-            print(Fore.RED + f"Self-test failed: {e}")
+            error("Self-test failed.")
             raise SystemExit(1)
     else:
         main_menu()
