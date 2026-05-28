@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+# =========================================================
+# EncryptoPI
+# Advanced Linux & Raspberry Pi encryption suite
+#
+# Fernet + AES-256-GCM encryption, integrity verification,
+# key management, secure batch operations, and manifest tracking.
+#
+# Copyright (c) 2026 WastelandSYS
+# Licensed under GPLv3
+# =========================================================
+
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
