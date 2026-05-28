@@ -329,7 +329,7 @@ The tool focuses on:
 
 # LICENSE
 
-(Coming soon)
+GNU GPL v3 License
 
 ---
 
