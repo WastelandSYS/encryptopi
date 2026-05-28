@@ -18,21 +18,60 @@ if [[ ! -f "${APP_SCRIPT}" ]]; then
 fi
 
 echo "[1/5] Installing dependencies..."
-if command -v apt-get >/dev/null 2>&1; then
-  echo "Detected apt-get. Installing Debian-family packages first..."
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get install -y python3 python3-pip python3-venv python3-cryptography python3-colorama python3-tqdm
-else
-  echo "apt-get not found. Skipping system package install."
-  echo "You'll need Python 3 and dependencies from requirements.txt installed manually for your distro."
+install_system_packages() {
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "Detected apt-get. Installing Debian-family packages first..."
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y python3 python3-pip python3-venv python3-cryptography python3-colorama python3-tqdm
+    return 0
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    echo "Detected dnf. Installing Fedora-family packages..."
+    dnf install -y python3 python3-pip python3-cryptography python3-colorama python3-tqdm
+    return 0
+  fi
+  if command -v yum >/dev/null 2>&1; then
+    echo "Detected yum. Installing RHEL-family packages..."
+    yum install -y python3 python3-pip python3-cryptography python3-colorama python3-tqdm
+    return 0
+  fi
+  if command -v pacman >/dev/null 2>&1; then
+    echo "Detected pacman. Installing Arch-family packages..."
+    pacman -Sy --noconfirm python python-pip python-cryptography python-colorama python-tqdm
+    return 0
+  fi
+  if command -v zypper >/dev/null 2>&1; then
+    echo "Detected zypper. Installing openSUSE packages..."
+    zypper --non-interactive install python3 python3-pip python3-cryptography python3-colorama python3-tqdm
+    return 0
+  fi
+  if command -v apk >/dev/null 2>&1; then
+    echo "Detected apk. Installing Alpine packages..."
+    apk add --no-cache python3 py3-pip py3-cryptography py3-colorama py3-tqdm
+    return 0
+  fi
+  return 1
+}
+
+if ! install_system_packages; then
+  echo "No supported system package manager detected."
+  echo "Proceeding with pip-only dependency installation."
 fi
 
 echo "Checking Python dependencies from requirements.txt..."
-if python3 -m pip --version >/dev/null 2>&1; then
+if [[ ! -f "${SCRIPT_DIR}/requirements.txt" ]]; then
+  echo "Warning: requirements.txt not found in ${SCRIPT_DIR}."
+  echo "Skipping pip dependency install. System packages (if installed) will be used."
+elif python3 -m pip --version >/dev/null 2>&1; then
   if ! python3 -m pip install --upgrade --no-input -r "${SCRIPT_DIR}/requirements.txt"; then
-    echo "pip dependency install failed. On Debian/Raspberry Pi OS/Kali, prefer system packages via apt."
-    exit 1
+    echo "pip dependency install failed (often due to externally-managed Python environments)."
+    if ! python3 -m pip install --break-system-packages --upgrade --no-input -r "${SCRIPT_DIR}/requirements.txt"; then
+      echo "Dependency install failed."
+      echo "Try creating a virtual environment and running:"
+      echo "  python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+      exit 1
+    fi
   fi
   echo "Python dependencies installed/verified."
 else
