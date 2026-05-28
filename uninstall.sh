@@ -23,8 +23,11 @@ remove_if_exists "${SYSTEM_DESKTOP_FILE}"
 
 if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
   USER_HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6)"
-  USER_DESKTOP_FILE="${USER_HOME}/Desktop/${DESKTOP_FILE_NAME}"
-  remove_if_exists "${USER_DESKTOP_FILE}"
+
+  if [[ -n "${USER_HOME}" && -d "${USER_HOME}" ]]; then
+    USER_DESKTOP_FILE="${USER_HOME}/Desktop/${DESKTOP_FILE_NAME}"
+    remove_if_exists "${USER_DESKTOP_FILE}"
+  fi
 fi
 
 echo "Uninstall complete."
