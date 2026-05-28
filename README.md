@@ -1,4 +1,4 @@
-<img width="1536" height="1024" alt="encryptopi-banner" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
+<img width="1774" height="887" alt="EncryptopiBannerImage" src="https://github.com/user-attachments/assets/83a00425-8d91-4dd9-af71-794e82ef4daf" />
 
 # encryptopi
 
@@ -11,6 +11,7 @@ Advanced terminal-based file and folder encryption suite for Linux systems with 
 - Dual encryption support using Fernet and AES-256-GCM
 - Secure file and folder encryption/decryption workflows
 - AES-GCM authenticated encryption with tamper detection
+- Streamed AES-GCM processing for improved large-file reliability
 - Fernet encryption with automatic integrity validation
 - Batch encryption/decryption for entire folders
 - Recursive folder traversal support
@@ -99,6 +100,11 @@ chmod +x install.sh uninstall.sh
 sudo ./install.sh
 ```
 
+Installer compatibility notes:
+- Supports apt, dnf, yum, pacman, zypper, and apk package managers.
+- Falls back to pip-based install when distro package detection is unavailable.
+- If your distro enforces externally managed Python environments, the installer will attempt a compatible pip fallback and provide a virtualenv recovery command.
+
 Launch with:
 
 ```bash
@@ -161,6 +167,25 @@ Run runtime self-test:
 python3 encryptopi.py --self-test --no-clear
 ```
 
+Show version:
+
+```bash
+python3 encryptopi.py --version
+```
+
+List keys in CLI mode:
+
+```bash
+python3 encryptopi.py --list-keys
+python3 encryptopi.py --list-keys --json
+```
+
+Verify manifest integrity in CLI mode:
+
+```bash
+python3 encryptopi.py --verify-manifest
+```
+
 Encrypt a single file using Fernet (CLI mode):
 
 ```bash
@@ -203,6 +228,12 @@ Then select:
 12. Check File Integrity
 ```
 
+New advanced menu options:
+- Single-file interactive encrypt/decrypt operations.
+- Dry-run preview for batch operations before execution.
+- Manifest tools submenu for verification, tail view, and pruning stale entries.
+- Decompression workflow to safely extract ZIP archives to `decompressed_output/`.
+
 ---
 
 # DIRECTORY STRUCTURE
@@ -213,6 +244,7 @@ encryptopi automatically creates and manages:
 input/
 output/
 decrypted_output/
+decompressed_output/
 keys/
 key_backups/
 logs/
