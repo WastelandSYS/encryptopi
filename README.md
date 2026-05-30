@@ -1,4 +1,4 @@
-<img width="1536" height="1024" alt="encryptopi-banner" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
+<img width="1536" height="1024" alt="encryptopiART" src="https://github.com/user-attachments/assets/06b2126c-c67a-4781-800e-78fec233b402" />
 
 # encryptopi
 
