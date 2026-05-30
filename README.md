@@ -1,8 +1,8 @@
-<img width="1774" height="887" alt="EncryptopiBannerImage" src="https://github.com/user-attachments/assets/83a00425-8d91-4dd9-af71-794e82ef4daf" />
+<img width="1536" height="1024" alt="encryptopi-banner" src="https://github.com/user-attachments/assets/7ed0e0e2-ca68-4381-86eb-76107615c6aa" />
 
 # encryptopi
 
-Advanced terminal-based file and folder encryption suite for Linux systems with Fernet + AES-256 encryption, key management, integrity verification, metadata handling, and secure batch operations.
+Advanced terminal-based file and folder encryption suite for Linux featuring Fernet and AES-256-GCM encryption, key management, integrity verification, metadata handling, and secure batch workflows.
 
 ---
 
@@ -41,53 +41,48 @@ Both encryption systems support secure file handling, batch operations, and mani
 
 ---
 
-# SCREENSHOTS / INTERFACE
+## ENCRYPTOPI WORKFLOW
 
-## Main Menu — Encryption Control Center
+### Main Menu
 
-```bash
-encryptopi
-```
+Access encryption, decryption, key management, integrity verification, backup, and recovery tools from one terminal interface.
 
----
+<p align="center">
+  <img width="317" height="625" alt="encryptopiMAINMENU" src="https://github.com/user-attachments/assets/53325f54-89db-424f-bdd8-a36c10a85522" />
+</p>
 
-## Key Management & Encryption Workflow
+### Key Management & Metadata
 
-```bash
-encryptopi
-```
+Manage Fernet and AES keys, view metadata, monitor backup status, and track key history.
 
-<img width="707" height="585" alt="encryptopi-menu" src="https://github.com/user-attachments/assets/c94d10f8-e364-4397-8b2e-c09281a3f702" />
+<p align="center">
+  <img width="505" height="153" alt="encryptopikeymanipulation" src="https://github.com/user-attachments/assets/4c0a8249-7461-450e-beed-5b9d3d6a8437" />
+</p>
 
----
+### AES Encryption Workflow
 
-## AES & Fernet Encryption Operations
+Encrypt files using AES-256-GCM with progress tracking and operation summaries.
 
-```bash
-encryptopi
-```
+<p align="center">
+  <img width="433" height="290" alt="encryptopiAESencryption" src="https://github.com/user-attachments/assets/5d9bb609-e3c6-45c1-bc93-f612ece63bae" />
+</p>
 
-<img width="707" height="585" alt="encryptopi-encryption" src="https://github.com/user-attachments/assets/201c7106-4413-4030-b3cf-e1dc8156065a" />
+### Integrity Verification
 
----
+Verify encrypted output against manifest hashes and confirm file integrity.
 
-## File Integrity & Key Management
+<p align="center">
+  <img width="425" height="294" alt="encryptopiCHECKINTEGRITY" src="https://github.com/user-attachments/assets/2d1dc73b-7d78-4ffa-97d6-0df04e20b554" />
+</p>
 
-```bash
-encryptopi
-```
+### Backup & Recovery
 
-<img width="707" height="585" alt="encryptopi-integrity" src="https://github.com/user-attachments/assets/d0a77ec3-1641-44eb-bc62-7f90c6be8aa3" />
+Restore keys and metadata from backups to recover encryption access when needed.
 
----
-
-## Backup & Restore Operations
-
-```bash
-encryptopi
-```
-
-<img width="707" height="585" alt="encryptopi-backup" src="https://github.com/user-attachments/assets/974c10aa-ebda-4370-8332-5f2f91cc5ce7" />
+<p align="center">
+  <img width="354" height="86" alt="encryptopiKeyBackup" src="https://github.com/user-attachments/assets/7f93e4bf-5a18-4d88-9bdc-1ad62bc2e301" />
+  <img width="347" height="87" alt="encryptopiKeyRestore" src="https://github.com/user-attachments/assets/82af9315-5e38-4456-80ba-f2eeda03dafa" />
+</p>
 
 ---
 
