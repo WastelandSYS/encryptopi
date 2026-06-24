@@ -377,7 +377,7 @@ def maybe_warn_fernet_large_files(paths, interactive=False):
             continue
     if not large_files:
         return True
-    warning("Fernet large-file warning: Fernet operations load full file data into memory.")
+    warning("Fernet large-file warning: Fernet is best kept for small files because it loads full file data into memory.")
     warning("For large files, AES-GCM is recommended because it uses streamed chunked processing.")
     for p, sz in large_files[:10]:
         print(Fore.YELLOW + f" - {p} ({format_size(sz)})")
@@ -399,6 +399,30 @@ def key_metadata_value(key_filename):
     except Exception:
         return "unreadable"
 
+def manifest_output_candidates(entry):
+    candidates = []
+    raw_output = entry.get("output_path")
+    if raw_output:
+        candidates.append(Path(raw_output))
+    rel_output = entry.get("output_relative_path")
+    if rel_output:
+        base = STATE.output_dir if entry.get("operation") == "encrypt" else STATE.decrypt_output_dir
+        candidates.append(base / rel_output)
+    # Preserve order while dropping duplicates.
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        key = str(candidate)
+        if key not in seen:
+            unique.append(candidate)
+            seen.add(key)
+    return unique
+
+
+def manifest_entry_output_exists(entry):
+    return any(candidate.exists() for candidate in manifest_output_candidates(entry))
+
+
 def verify_manifest_integrity(manifest_path=None):
     manifest_path = Path(manifest_path) if manifest_path else (STATE.output_dir / "operations_manifest.jsonl")
     if not manifest_path.exists():
@@ -413,11 +437,12 @@ def verify_manifest_integrity(manifest_path=None):
             continue
         try:
             entry = json.loads(line)
-            out = Path(entry.get("output_path", ""))
+            candidates = manifest_output_candidates(entry)
+            out = next((candidate for candidate in candidates if candidate.exists()), candidates[0] if candidates else Path(""))
             expected = entry.get("output_sha256")
             if not out.exists():
                 error(f"FAIL [{i}] missing: {out}")
-                LOGGER.error("Manifest verify fail [line %s]: missing output %s", i, out)
+                LOGGER.error("Manifest verify fail [line %s]: missing output candidates %s", i, [str(c) for c in candidates])
                 ok = False
                 fail_count += 1
                 continue
@@ -470,12 +495,17 @@ def write_manifest(entry, manifest_path=None):
         mf.write(json.dumps(entry) + "\n")
 
 def build_manifest_entry(operation, algorithm, input_path, output_path, key_name, input_sha256=None, output_sha256=None):
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    output_base = STATE.output_dir if operation == "encrypt" else STATE.decrypt_output_dir
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "operation": operation,
         "algorithm": algorithm,
         "input_path": str(input_path),
         "output_path": str(output_path),
+        "input_relative_path": str(relative_path_for(input_path, STATE.input_dir if operation == "encrypt" else STATE.output_dir)),
+        "output_relative_path": str(relative_path_for(output_path, output_base)),
         "input_sha256": input_sha256 if input_sha256 is not None else calculate_hash(input_path),
         "output_sha256": output_sha256 if output_sha256 is not None else calculate_hash(output_path),
         "key_name": key_name,
@@ -1102,7 +1132,7 @@ def manifest_filter_view():
                 continue
             if key_name and key_name not in entry.get("key_name", "").lower():
                 continue
-            exists = Path(entry.get("output_path", "")).exists()
+            exists = manifest_entry_output_exists(entry)
             if status == "missing" and exists:
                 continue
             if status == "present" and not exists:
@@ -1113,7 +1143,7 @@ def manifest_filter_view():
             if "_invalid" in entry:
                 print(f"line {entry['_line']}: invalid JSON")
                 continue
-            exists = "present" if Path(entry.get("output_path", "")).exists() else "missing"
+            exists = "present" if manifest_entry_output_exists(entry) else "missing"
             print(f"line {entry['_line']}: {entry.get('timestamp_utc')} {entry.get('operation')} {entry.get('algorithm')} key={entry.get('key_name')} output={exists} {entry.get('output_path')}")
     except Exception:
         LOGGER.exception("manifest_filter_view failed")
@@ -1128,7 +1158,7 @@ def audit_report():
         decrypt_files_found = [p for p in STATE.decrypt_output_dir.rglob("*") if p.is_file()] if STATE.decrypt_output_dir.exists() else []
         entries = read_manifest_entries()
         invalid_entries = [e for e in entries if "_invalid" in e]
-        missing_outputs = [e for e in entries if "_invalid" not in e and not Path(e.get("output_path", "")).exists()]
+        missing_outputs = [e for e in entries if "_invalid" not in e and not manifest_entry_output_exists(e)]
         backed_up = sum(1 for k in key_files if (STATE.backup_dir / k.name).exists())
         print(Fore.CYAN + "\nAudit report")
         print(f"Version:                  {APP_VERSION}")
@@ -1280,7 +1310,8 @@ def single_file_operation():
                 return
             allow_legacy_cfb = False
             if op == "decrypt" and needs_legacy_cfb_opt_in(src):
-                allow_legacy_cfb = input(Fore.CYAN + "File lacks an AES-GCM header. Try legacy AES-CFB decrypt? (y/N): ").strip().lower() == "y"
+                warning("Legacy AES-CFB has no authentication; wrong keys or tampering may produce garbage output without cryptographic proof.")
+                allow_legacy_cfb = input(Fore.CYAN + "File lacks an AES-GCM header. Try legacy AES-CFB recovery decrypt? (y/N): ").strip().lower() == "y"
             result = encrypt_files_aes_with_key(src, key, key_filename, output_policy=output_policy) if op == "encrypt" else decrypt_file_aes(src, key, key_filename, allow_legacy_cfb=allow_legacy_cfb, output_policy=output_policy)
         if result:
             success(f"Completed: {result}")
@@ -1370,7 +1401,8 @@ def custom_folder_operation():
                 return
             allow_legacy_cfb = False
             if op == "decrypt" and algo == "aes" and any(needs_legacy_cfb_opt_in(p) for p in files):
-                allow_legacy_cfb = prompt_yes_no("Some files lack a GCM header. Try legacy AES-CFB decrypt?", default=False)
+                warning("Legacy AES-CFB has no authentication; wrong keys or tampering may produce garbage output without cryptographic proof.")
+                allow_legacy_cfb = prompt_yes_no("Some files lack a GCM header. Try legacy AES-CFB recovery decrypt?", default=False)
             for file_path in tqdm(files, desc=op.title(), unit="file"):
                 if algo == "fernet":
                     result = encrypt_file_fernet(file_path, key, key_filename, output_dir=out_dir, relative_base=folder, output_policy=output_policy) if op == "encrypt" else decrypt_file_fernet(file_path, key, key_filename, decrypt_output_dir=out_dir, relative_base=folder, output_policy=output_policy)
@@ -1448,8 +1480,7 @@ def manifest_tools_menu():
                     continue
                 try:
                     entry = json.loads(line)
-                    out = Path(entry.get("output_path", ""))
-                    if out.exists():
+                    if manifest_entry_output_exists(entry):
                         kept.append(line)
                     else:
                         removed += 1
@@ -1606,33 +1637,71 @@ def delete_key():
 # Function to back up keys
 def backup_keys():
     try:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        snapshot_dir = STATE.backup_dir / timestamp
+        suffix = 1
+        while snapshot_dir.exists():
+            snapshot_dir = STATE.backup_dir / f"{timestamp}_{suffix}"
+            suffix += 1
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        skipped_latest = 0
         for key_file in sorted(STATE.keys_dir.iterdir()):
             if key_file.suffix in [".key", ".json"] and (key_file.suffix == ".key" or key_file.name.endswith("_metadata.json")):
-                backup_file = STATE.backup_dir / key_file.name
-                backup_file.write_bytes(key_file.read_bytes())
-                if backup_file.suffix == ".key":
-                    secure_key_permissions(backup_file)
+                snapshot_file = snapshot_dir / key_file.name
+                snapshot_file.write_bytes(key_file.read_bytes())
+                if snapshot_file.suffix == ".key":
+                    secure_key_permissions(snapshot_file)
+                latest_file = STATE.backup_dir / key_file.name
+                if latest_file.exists():
+                    skipped_latest += 1
+                    warning(f"Latest backup already exists, not overwriting: {latest_file.name}")
+                else:
+                    latest_file.write_bytes(key_file.read_bytes())
+                    if latest_file.suffix == ".key":
+                        secure_key_permissions(latest_file)
+                copied += 1
                 success(f"Backed up: {key_file.name}")
-        success("Backup operation completed.")
+        success(f"Backup operation completed. Snapshot: {snapshot_dir} Files: {copied} Latest-skipped: {skipped_latest}")
     except Exception as e:
         LOGGER.exception("backup_keys failed")
         error("Error backing up keys.")
         
-# Function to restore keys from backup
 def restore_keys():
     try:
         if not STATE.backup_dir.is_dir():
             error("Backup directory does not exist.")
             return
-        
-        for backup_file in sorted(STATE.backup_dir.iterdir()):
-            if backup_file.suffix in [".key", ".json"] and (backup_file.suffix == ".key" or backup_file.name.endswith("_metadata.json")):
-                restored = STATE.keys_dir / backup_file.name
-                restored.write_bytes(backup_file.read_bytes())
-                if restored.suffix == ".key":
-                    secure_key_permissions(restored)
-                success(f"Restored: {backup_file.name}")
-        success("Restore operation completed.")
+
+        snapshot_dirs = sorted([p for p in STATE.backup_dir.iterdir() if p.is_dir()])
+        restore_dir = STATE.backup_dir
+        if snapshot_dirs:
+            latest_snapshot = snapshot_dirs[-1]
+            if prompt_yes_no(f"Restore from latest timestamped snapshot {latest_snapshot.name}?", default=True):
+                restore_dir = latest_snapshot
+
+        candidates = [
+            backup_file for backup_file in sorted(restore_dir.iterdir())
+            if backup_file.is_file() and backup_file.suffix in [".key", ".json"] and (backup_file.suffix == ".key" or backup_file.name.endswith("_metadata.json"))
+        ]
+        if not candidates:
+            warning("No key or metadata backup files found to restore.")
+            return
+
+        overwrites = [backup_file.name for backup_file in candidates if (STATE.keys_dir / backup_file.name).exists()]
+        if overwrites:
+            warning(f"Restore would overwrite {len(overwrites)} existing file(s): {', '.join(overwrites[:5])}{'...' if len(overwrites) > 5 else ''}")
+            if not prompt_yes_no("Overwrite existing key/metadata files during restore?", default=False):
+                warning("Restore cancelled.")
+                return
+
+        for backup_file in candidates:
+            restored = STATE.keys_dir / backup_file.name
+            restored.write_bytes(backup_file.read_bytes())
+            if restored.suffix == ".key":
+                secure_key_permissions(restored)
+            success(f"Restored: {backup_file.name}")
+        success(f"Restore operation completed from {restore_dir}.")
     except Exception as e:
         LOGGER.exception("restore_keys failed")
         error("Error restoring keys.")
@@ -1743,31 +1812,50 @@ def decrypt_file_aes(file_path, key, key_name="unknown", manifest_path=None, dec
                     tmp_path.unlink()
                 raise
         elif prefix == b"GCM1":
-            with open(file_path, "rb") as file:
-                encrypted_data = file.read()
-            iv = encrypted_data[4:16]
-            tag = encrypted_data[16:32]
-            ciphertext = encrypted_data[32:]
-            cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
-            decryptor = cipher.decryptor()
-            decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
-            with open(decrypted_file_path, "wb") as file:
-                file.write(decrypted_data)
+            tmp_path = None
+            try:
+                with open(file_path, "rb") as file:
+                    encrypted_data = file.read()
+                iv = encrypted_data[4:16]
+                tag = encrypted_data[16:32]
+                ciphertext = encrypted_data[32:]
+                cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
+                decryptor = cipher.decryptor()
+                decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
+                decrypted_file_path.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile("wb", delete=False, dir=str(decrypted_file_path.parent), prefix=".decrypt_tmp_") as tf:
+                    tmp_path = Path(tf.name)
+                    tf.write(decrypted_data)
+                tmp_path.replace(decrypted_file_path)
+            except Exception:
+                if tmp_path and tmp_path.exists():
+                    tmp_path.unlink()
+                raise
         else:
             if not allow_legacy_cfb:
                 raise ValueError("Unsupported AES file format. Use AES-GCM files or explicitly allow legacy AES-CFB decrypt.")
-            with open(file_path, "rb") as file:
-                encrypted_data = file.read()
-            if len(encrypted_data) < 16:
-                raise ValueError("Invalid legacy AES-CFB file format.")
-            # Backward-compatible decrypt path for legacy CFB-encrypted files
-            iv = encrypted_data[:16]
-            ciphertext = encrypted_data[16:]
-            cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
-            decryptor = cipher.decryptor()
-            decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
-            with open(decrypted_file_path, "wb") as file:
-                file.write(decrypted_data)
+            warning("Legacy AES-CFB decrypt is unauthenticated recovery mode; verify recovered file contents before trusting them.")
+            tmp_path = None
+            try:
+                with open(file_path, "rb") as file:
+                    encrypted_data = file.read()
+                if len(encrypted_data) < 16:
+                    raise ValueError("Invalid legacy AES-CFB file format.")
+                # Backward-compatible decrypt path for legacy CFB-encrypted files
+                iv = encrypted_data[:16]
+                ciphertext = encrypted_data[16:]
+                cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+                decryptor = cipher.decryptor()
+                decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
+                decrypted_file_path.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile("wb", delete=False, dir=str(decrypted_file_path.parent), prefix=".decrypt_tmp_") as tf:
+                    tmp_path = Path(tf.name)
+                    tf.write(decrypted_data)
+                tmp_path.replace(decrypted_file_path)
+            except Exception:
+                if tmp_path and tmp_path.exists():
+                    tmp_path.unlink()
+                raise
         algo = "AES-GCM-v2" if prefix == b"GCM2" else ("AES-GCM-v1" if prefix == b"GCM1" else "AES-CFB-legacy")
         write_manifest(build_manifest_entry("decrypt", algo, file_path, decrypted_file_path, key_name), manifest_path=manifest_path)
         success(f"Decrypted {file_path.name} to {decrypted_file_path.name}")
@@ -2025,7 +2113,8 @@ def decrypt_files_aes():
         allow_legacy_cfb = False
         if legacy_candidates:
             warning(f"{len(legacy_candidates)} AES file(s) lack a GCM header and may be legacy AES-CFB.")
-            allow_legacy_cfb = input(Fore.CYAN + "Try legacy AES-CFB decrypt for those files? (y/N): ").strip().lower() == "y"
+            warning("Legacy AES-CFB has no authentication; wrong keys or tampering may produce garbage output without cryptographic proof.")
+            allow_legacy_cfb = input(Fore.CYAN + "Try legacy AES-CFB recovery decrypt for those files? (y/N): ").strip().lower() == "y"
         output_policy = prompt_output_policy()
         info("Decrypting files...")
         ok_count, fail_count = 0, 0
@@ -2042,6 +2131,15 @@ def decrypt_files_aes():
     except Exception:
         LOGGER.exception("decrypt_files_aes failed")
         error("Error decrypting files.")
+
+def warn_cli_encryption_safety(args):
+    if args.command != "encrypt" or getattr(args, "dry_run", False):
+        return
+    if getattr(args, "yes_i_understand_key_loss", False):
+        return
+    warning("CLI encryption will write encrypted files. Back up your key/passphrase first; lost secrets cannot be recovered.")
+    warning("Pass --yes-i-understand-key-loss to acknowledge this warning in automation.")
+
 
 def run_cli_operation(args):
     try:
@@ -2071,6 +2169,7 @@ def run_cli_operation(args):
         if args.dry_run:
             dry_run_preview(targets, f"CLI {args.command} via {args.algo}")
             return
+        warn_cli_encryption_safety(args)
         if args.algo == "passphrase":
             passphrase_value = os.environ.get(args.passphrase_env)
             if not passphrase_value:
@@ -2615,6 +2714,7 @@ examples:
         cp.add_argument("--no-recursive", dest="recursive", action="store_false", help="Only process direct children when using --folder")
         cp.add_argument("--allow-legacy-cfb", action="store_true", help="Permit decrypting legacy AES-CFB files without a GCM header")
         cp.add_argument("--passphrase-env", default="ENCRYPTOPI_PASSPHRASE", help="Environment variable containing passphrase for passphrase mode")
+        cp.add_argument("--yes-i-understand-key-loss", action="store_true", help="Acknowledge that lost keys/passphrases cannot recover encrypted files")
     args = parser.parse_args()
 
     if args.no_clear:
@@ -2625,6 +2725,8 @@ examples:
     elif args.list_keys:
         list_keys_cli(as_json=args.json)
     elif args.verify_manifest:
+        ensure_app_dirs()
+        LOGGER = setup_logger()
         raise SystemExit(0 if verify_manifest_integrity() else 1)
     elif args.doctor:
         raise SystemExit(0 if doctor_check() else 1)
