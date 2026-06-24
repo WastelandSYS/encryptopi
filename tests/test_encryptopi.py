@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -179,6 +180,36 @@ class TempStateTest(unittest.TestCase):
         with patch.dict(os.environ, {"ENCRYPTOPI_NO_CLEAR": "1"}), patch("builtins.input", return_value="n"), redirect_stdout(io.StringIO()) as out:
             self.assertTrue(encryptopi.confirm_encryption_safety())
         self.assertEqual("", out.getvalue())
+
+    def test_manifest_verification_uses_relative_output_fallback(self):
+        src = self.state.input_dir / "sample.txt"
+        src.write_text("portable manifest", encoding="utf-8")
+        key = os.urandom(32)
+        with redirect_stdout(io.StringIO()):
+            encrypted = encryptopi.encrypt_files_aes_with_key(src, key, "aes.key")
+        manifest_path = self.state.output_dir / "operations_manifest.jsonl"
+        entry = json.loads(manifest_path.read_text(encoding="utf-8").splitlines()[0])
+        entry["output_path"] = str(self.state.script_dir / "moved" / encrypted.name)
+        self.assertTrue(encryptopi.manifest_entry_output_exists(entry))
+        manifest_path.write_text(json.dumps(entry) + "\n", encoding="utf-8")
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertTrue(encryptopi.verify_manifest_integrity(manifest_path=manifest_path))
+        self.assertIn("Overall result: PASS", out.getvalue())
+
+    def test_backup_keys_creates_snapshot_without_overwriting_latest(self):
+        key_path = self.state.keys_dir / "safe.key"
+        key_path.write_bytes(b"first" * 7)
+        with redirect_stdout(io.StringIO()):
+            encryptopi.backup_keys()
+        latest = self.state.backup_dir / "safe.key"
+        self.assertEqual(b"first" * 7, latest.read_bytes())
+        key_path.write_bytes(b"second" * 6)
+        with redirect_stdout(io.StringIO()) as out:
+            encryptopi.backup_keys()
+        self.assertEqual(b"first" * 7, latest.read_bytes())
+        snapshots = [p for p in self.state.backup_dir.iterdir() if p.is_dir()]
+        self.assertTrue(any((snapshot / "safe.key").read_bytes() == b"second" * 6 for snapshot in snapshots))
+        self.assertIn("not overwriting", out.getvalue())
 
 
 if __name__ == "__main__":
